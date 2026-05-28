@@ -4,6 +4,8 @@ A single-file, offline converter between **Flipper Zero `.nfc`** dumps and **Cha
 
 Runs entirely in your browser — no server, no build step, no internet connection, no upload. Nothing leaves your machine.
 
+**[▶ Open the live tool](https://bosund.github.io/NFC_bridge/)**
+
 ## Why
 
 Flipper Zero and Chameleon Ultra both emulate MIFARE Classic, but they use different dump formats and neither imports the other's natively. Converting by hand is error-prone: a common failure is carrying over a stale slot buffer, where a 1K card ends up wrapped in a 4K-sized data structure padded with leftover garbage blocks. A reader activates the card but then rejects it during sector authentication (red light), even though the keys and anti-collision data are correct.
