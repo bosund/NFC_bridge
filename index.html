@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFC Bridge — Flipper ⇄ Chameleon Ultra</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e0d;
+    --panel: #111817;
+    --line: #1e2b28;
+    --ink: #d9f2ea;
+    --muted: #5f7a72;
+    --amber: #e8b34a;
+    --green: #3ddc84;
+    --red: #ff5a52;
+    --cyan: #2fd9c8;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(45,217,200,0.06), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(232,179,74,0.05), transparent 40%);
+    color: var(--ink);
+    font-family: var(--mono);
+    min-height: 100vh;
+    padding: 40px 20px;
+    line-height: 1.5;
+  }
+
+  .grain::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.035; z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap { max-width: 920px; margin: 0 auto; position: relative; z-index: 2; }
+
+  header { margin-bottom: 36px; }
+  .kicker {
+    font-size: 11px; letter-spacing: 0.35em; text-transform: uppercase;
+    color: var(--cyan); margin-bottom: 10px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 800; font-size: clamp(32px, 6vw, 56px);
+    line-height: 0.95; letter-spacing: -0.02em;
+  }
+  h1 .ar { color: var(--amber); }
+  .sub { color: var(--muted); margin-top: 12px; max-width: 560px; font-size: 13px; }
+
+  .direction {
+    display: flex; gap: 0; margin: 28px 0; border: 1px solid var(--line);
+    border-radius: 2px; overflow: hidden; width: fit-content;
+  }
+  .dir-btn {
+    background: transparent; border: none; color: var(--muted); font-family: var(--mono);
+    padding: 12px 22px; cursor: pointer; font-size: 12px; letter-spacing: 0.05em;
+    transition: all 0.2s; border-right: 1px solid var(--line);
+  }
+  .dir-btn:last-child { border-right: none; }
+  .dir-btn.active { background: var(--amber); color: #0a0e0d; font-weight: 700; }
+  .dir-btn:hover:not(.active) { color: var(--ink); }
+
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 4px; padding: 54px 30px;
+    text-align: center; transition: all 0.25s; cursor: pointer; position: relative;
+    background: rgba(17,24,23,0.5);
+  }
+  .drop:hover { border-color: var(--cyan); background: rgba(47,217,200,0.03); }
+  .drop.over { border-color: var(--green); background: rgba(61,220,132,0.06); transform: scale(1.005); }
+  .drop-icon { font-size: 30px; margin-bottom: 14px; opacity: 0.7; }
+  .drop-title { font-family: var(--display); font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .drop-hint { color: var(--muted); font-size: 12px; }
+  .drop-hint b { color: var(--amber); }
+  input[type=file] { display: none; }
+
+  .status { margin-top: 22px; min-height: 24px; font-size: 13px; }
+  .status .ok { color: var(--green); }
+  .status .err { color: var(--red); }
+  .status .info { color: var(--cyan); }
+
+  .result { margin-top: 22px; display: none; }
+  .result.show { display: block; animation: rise 0.4s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .card-meta {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px;
+    overflow: hidden; margin-bottom: 18px;
+  }
+  .meta-cell { background: var(--panel); padding: 14px 16px; }
+  .meta-k { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .meta-v { font-size: 15px; margin-top: 4px; color: var(--ink); word-break: break-all; }
+  .meta-v.hl { color: var(--amber); }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em; padding: 13px 24px;
+    border-radius: 3px; cursor: pointer; border: 1px solid var(--green);
+    background: var(--green); color: #07120c; font-weight: 700; transition: all 0.18s;
+  }
+  .btn:hover { box-shadow: 0 0 0 3px rgba(61,220,132,0.2); }
+  .btn.ghost { background: transparent; color: var(--cyan); border-color: var(--line); font-weight: 400; }
+  .btn.ghost:hover { border-color: var(--cyan); box-shadow: none; }
+
+  .hexview {
+    margin-top: 20px; border: 1px solid var(--line); border-radius: 4px; background: #0c1110;
+    max-height: 280px; overflow: auto; font-size: 11.5px;
+  }
+  .hexrow { display: flex; gap: 14px; padding: 3px 14px; border-bottom: 1px solid rgba(30,43,40,0.4); white-space: nowrap; }
+  .hexrow:hover { background: rgba(47,217,200,0.04); }
+  .hx-blk { color: var(--muted); width: 58px; flex-shrink: 0; }
+  .hx-byt { color: var(--ink); letter-spacing: 0.05em; }
+  .hx-asc { color: var(--cyan); opacity: 0.6; margin-left: auto; }
+  .hexrow.trailer .hx-byt { color: var(--amber); }
+  .hexrow.flagged { background: rgba(255,90,82,0.08); }
+  .hexrow.flagged .hx-blk { color: var(--red); }
+
+  .note {
+    margin-top: 26px; padding: 16px 18px; border-left: 2px solid var(--cyan);
+    background: rgba(47,217,200,0.04); font-size: 12px; color: var(--muted);
+  }
+  .note b { color: var(--ink); font-weight: 400; }
+  footer { margin-top: 40px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0.05em; }
+</style>
+</head>
+<body class="grain">
+<div class="wrap">
+  <header>
+    <div class="kicker">Offline · No upload · Runs in your browser</div>
+    <h1>NFC <span class="ar">Bridge</span></h1>
+    <p class="sub">Two-way conversion between Flipper Zero <code>.nfc</code> and Chameleon Ultra <code>.json</code>. MIFARE Classic 1K &amp; 4K. Writes only the blocks belonging to the card type — no leftover buffer is carried over.</p>
+  </header>
+
+  <div class="direction" id="dir">
+    <button class="dir-btn active" data-mode="f2c">Flipper&nbsp;.nfc → Chameleon&nbsp;.json</button>
+    <button class="dir-btn" data-mode="c2f">Chameleon&nbsp;.json → Flipper&nbsp;.nfc</button>
+  </div>
+
+  <div class="drop" id="drop">
+    <div class="drop-icon">⇄</div>
+    <div class="drop-title" id="dropTitle">Drop your .nfc file here</div>
+    <div class="drop-hint">or <b>click to choose</b> · converted locally, nothing leaves your machine</div>
+    <input type="file" id="file" accept=".nfc,.json,.txt">
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <div class="card-meta" id="meta"></div>
+    <div class="actions">
+      <button class="btn" id="download">↓ Download converted file</button>
+      <button class="btn ghost" id="copy">Copy to clipboard</button>
+    </div>
+    <div class="hexview" id="hexview"></div>
+  </div>
+
+  <div class="note">
+    <b>Sector trailers</b> are shown in amber, <b>flagged blocks</b> in red (non-empty blocks beyond the card type's limit — typically leftovers from a previous slot buffer). The conversion drops them automatically, so the output is always consistent.
+  </div>
+
+  <footer>NFC BRIDGE · single-file · works offline · MIFARE Classic only</footer>
+</div>
+
+<script>
+const state = { mode: 'f2c', output: null, outName: null };
+
+const dirEl = document.getElementById('dir');
+const dropEl = document.getElementById('drop');
+const fileEl = document.getElementById('file');
+const statusEl = document.getElementById('status');
+const resultEl = document.getElementById('result');
+const metaEl = document.getElementById('meta');
+const hexEl = document.getElementById('hexview');
+const dropTitle = document.getElementById('dropTitle');
+
+dirEl.addEventListener('click', e => {
+  const btn = e.target.closest('.dir-btn');
+  if (!btn) return;
+  document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.mode = btn.dataset.mode;
+  dropTitle.textContent = state.mode === 'f2c' ? 'Drop your .nfc file here' : 'Drop your .json file here';
+  fileEl.setAttribute('accept', state.mode === 'f2c' ? '.nfc,.txt' : '.json,.txt');
+  reset();
+});
+
+function reset() {
+  statusEl.innerHTML = '';
+  resultEl.classList.remove('show');
+  state.output = null;
+}
+function setStatus(msg, cls) { statusEl.innerHTML = `<span class="${cls}">${msg}</span>`; }
+
+dropEl.addEventListener('click', () => fileEl.click());
+dropEl.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('over'); });
+dropEl.addEventListener('dragleave', () => dropEl.classList.remove('over'));
+dropEl.addEventListener('drop', e => {
+  e.preventDefault(); dropEl.classList.remove('over');
+  if (e.dataTransfer.files.length) handle(e.dataTransfer.files[0]);
+});
+fileEl.addEventListener('change', () => { if (fileEl.files.length) handle(fileEl.files[0]); });
+
+function handle(file) {
+  reset();
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      if (state.mode === 'f2c') flipperToChameleon(reader.result, file.name);
+      else chameleonToFlipper(reader.result, file.name);
+    } catch (err) {
+      setStatus('Error: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ---- helpers ----
+const hex2 = n => n.toString(16).toUpperCase().padStart(2, '0');
+const isTrailer = i => (i % 4 === 3) && i < 128 || (i >= 128 && ((i - 128) % 16 === 15));
+// blocks-per-type
+function blockCount(type) { return type === '4K' ? 256 : 64; }
+
+function flipperToChameleon(text, fname) {
+  const lines = text.split(/\r?\n/);
+  let uid = '', atqa = '', sak = '', type = '1K';
+  const blocks = {};
+  for (const line of lines) {
+    const t = line.trim();
+    let m;
+    if ((m = t.match(/^UID:\s*(.+)$/i))) uid = m[1].trim();
+    else if ((m = t.match(/^ATQA:\s*(.+)$/i))) atqa = m[1].trim();
+    else if ((m = t.match(/^SAK:\s*(.+)$/i))) sak = m[1].trim();
+    else if ((m = t.match(/^Mifare Classic type:\s*(\S+)/i))) type = m[1].toUpperCase();
+    else if ((m = t.match(/^Block (\d+):\s*(.+)$/i))) {
+      const idx = parseInt(m[1]);
+      const bytes = m[2].trim().split(/\s+/).map(h => h === '??' ? 0 : parseInt(h, 16));
+      blocks[idx] = bytes;
+    }
+  }
+  if (!uid) throw new Error('No UID found — is this a valid Flipper .nfc Mifare Classic file?');
+  const n = blockCount(type);
+  const data = [];
+  for (let i = 0; i < n; i++) data.push(blocks[i] || new Array(16).fill(0));
+
+  const atqaBytes = atqa ? atqa.split(/\s+/).map(h => parseInt(h, 16)) : [0, 4];
+  const sakInt = sak ? parseInt(sak, 16) : 8;
+  const tag = type === '4K' ? 1002 : 1001; // ChameleonUltra tag enums: 1001=MFC1K, 1002=MFC4K
+
+  const obj = {
+    id: crypto.randomUUID ? crypto.randomUUID() : 'gen-' + Date.now(),
+    uid: uid,
+    sak: sakInt,
+    atqa: atqaBytes,
+    ats: [],
+    name: fname.replace(/\.[^.]+$/, '').slice(0, 16) || 'card',
+    tag: tag,
+    color: '#ff5722',
+    data: data,
+    extra: {}
+  };
+  state.output = JSON.stringify(obj);
+  state.outName = fname.replace(/\.[^.]+$/, '') + '.json';
+  renderMeta({ uid, sak: hex2(sakInt), atqa: atqaBytes.map(hex2).join(' '), type, blocks: n });
+  renderHex(data, type);
+  setStatus(`Converted to Chameleon Ultra JSON · ${n} blocks · type ${type}`, 'ok');
+  finish('application/json');
+}
+
+function chameleonToFlipper(text, fname) {
+  let obj;
+  try { obj = JSON.parse(text); } catch { throw new Error('Invalid JSON.'); }
+  if (!obj.data || !Array.isArray(obj.data)) throw new Error('No data array in JSON.');
+
+  const tag = obj.tag || 1001;
+  const declaredType = tag === 1002 ? '4K' : '1K';
+  // Determine real type from non-empty content, but never exceed declared if consistent
+  let lastNonEmpty = -1;
+  obj.data.forEach((b, i) => { if (b && b.length) lastNonEmpty = i; });
+  // choose type by declared tag, trim to its block count
+  const type = declaredType;
+  const n = blockCount(type);
+
+  const uid = obj.uid || '00 00 00 00';
+  const atqa = (obj.atqa && obj.atqa.length) ? obj.atqa.map(hex2).join(' ') : '00 04';
+  const sak = hex2(typeof obj.sak === 'number' ? obj.sak : 8);
+
+  let out = '';
+  out += 'Filetype: Flipper NFC device\n';
+  out += 'Version: 4\n';
+  out += '# Converted by NFC Bridge\n';
+  out += 'Device type: Mifare Classic\n';
+  out += '# UID is common for all formats\n';
+  out += `UID: ${uid}\n`;
+  out += '# ISO14443-3A specific data\n';
+  out += `ATQA: ${atqa}\n`;
+  out += `SAK: ${sak}\n`;
+  out += '# Mifare Classic specific data\n';
+  out += `Mifare Classic type: ${type}\n`;
+  out += 'Data format version: 2\n';
+  out += "# Mifare Classic blocks, '??' means unknown data\n";
+
+  const dataForView = [];
+  for (let i = 0; i < n; i++) {
+    let b = obj.data[i];
+    if (!b || !b.length) b = new Array(16).fill(0);
+    b = b.slice(0, 16);
+    while (b.length < 16) b.push(0);
+    dataForView.push(b);
+    out += `Block ${i}: ${b.map(hex2).join(' ')}\n`;
+  }
+  state.output = out;
+  state.outName = (obj.name || fname.replace(/\.[^.]+$/, '') || 'card') + '.nfc';
+
+  const flaggedNote = (lastNonEmpty >= n) ? ` · dropped ${lastNonEmpty - n + 1} blocks outside ${type}` : '';
+  renderMeta({ uid, sak, atqa, type, blocks: n });
+  renderHex(dataForView, type, obj.data, n);
+  setStatus(`Converted to Flipper .nfc · ${n} blocks · type ${type}${flaggedNote}`, 'ok');
+  finish('text/plain');
+}
+
+function renderMeta(m) {
+  metaEl.innerHTML = `
+    <div class="meta-cell"><div class="meta-k">UID</div><div class="meta-v hl">${m.uid}</div></div>
+    <div class="meta-cell"><div class="meta-k">SAK</div><div class="meta-v">${m.sak}</div></div>
+    <div class="meta-cell"><div class="meta-k">ATQA</div><div class="meta-v">${m.atqa}</div></div>
+    <div class="meta-cell"><div class="meta-k">Type</div><div class="meta-v">${m.type}</div></div>
+    <div class="meta-cell"><div class="meta-k">Blocks</div><div class="meta-v">${m.blocks}</div></div>`;
+}
+
+function renderHex(data, type, fullData, limit) {
+  let html = '';
+  data.forEach((b, i) => {
+    const bytes = b.map(hex2).join(' ');
+    const ascii = b.map(v => (v >= 32 && v < 127) ? String.fromCharCode(v) : '.').join('');
+    const cls = isTrailer(i) ? ' trailer' : '';
+    html += `<div class="hexrow${cls}"><span class="hx-blk">BLK ${i}</span><span class="hx-byt">${bytes}</span><span class="hx-asc">${ascii}</span></div>`;
+  });
+  // show dropped blocks if any (chameleon→flipper)
+  if (fullData && limit && fullData.length > limit) {
+    for (let i = limit; i < fullData.length; i++) {
+      const b = fullData[i];
+      if (b && b.length && b.some(v => v !== 0)) {
+        const bytes = b.slice(0,16).map(hex2).join(' ');
+        html += `<div class="hexrow flagged"><span class="hx-blk">BLK ${i}</span><span class="hx-byt">${bytes}</span><span class="hx-asc">DROPPED</span></div>`;
+      }
+    }
+  }
+  hexEl.innerHTML = html;
+}
+
+function finish(mime) {
+  resultEl.classList.add('show');
+  document.getElementById('download').onclick = () => {
+    const blob = new Blob([state.output], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = state.outName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  document.getElementById('copy').onclick = () => {
+    navigator.clipboard.writeText(state.output).then(
+      () => setStatus('Copied to clipboard ✓', 'info'),
+      () => setStatus('Could not copy automatically', 'err')
+    );
+  };
+}
+</script>
+</body>
+</html>
